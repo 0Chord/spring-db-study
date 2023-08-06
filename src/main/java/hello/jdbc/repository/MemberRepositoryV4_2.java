@@ -11,32 +11,36 @@ import javax.sql.DataSource;
 
 import org.springframework.jdbc.datasource.DataSourceUtils;
 import org.springframework.jdbc.support.JdbcUtils;
+import org.springframework.jdbc.support.SQLErrorCodeSQLExceptionTranslator;
+import org.springframework.jdbc.support.SQLExceptionTranslator;
 
 import hello.jdbc.domain.Member;
+import hello.jdbc.repository.ex.MyDBException;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * 트랜잭션 - 트랜잭션 매니저로
- * DatasourceUtils.getConnection()
- * DatasourceUtils.releaseConnection()
+ * SQL EXCEPTION Translator 추가
  */
 @Slf4j
-public class MemberRepositoryV3{
+public class MemberRepositoryV4_2 implements MemberRepository {
 
 	private final DataSource dataSource;
+	private final SQLExceptionTranslator exTranslator;
 
-	public MemberRepositoryV3(DataSource dataSource) {
+	public MemberRepositoryV4_2(DataSource dataSource) {
 		this.dataSource = dataSource;
+		this.exTranslator = new SQLErrorCodeSQLExceptionTranslator(dataSource);
 	}
 
-	private Connection getConnection() throws SQLException {
+	private Connection getConnection() {
 		// 주의! 트랜잭션 동기화를 사용하려면 DatasourceUtils를 사용해야 한다
 		Connection conn = DataSourceUtils.getConnection(dataSource);
 		log.info("get connection = {}, class = {}", conn, conn.getClass());
 		return conn;
 	}
 
-	public Member save(Member member) throws SQLException {
+	@Override
+	public Member save(Member member) {
 		String sql = "insert into member(member_id,money) values (?, ?)";
 
 		Connection conn = null;
@@ -50,8 +54,7 @@ public class MemberRepositoryV3{
 			pstmt.executeUpdate();
 			return member;
 		} catch (SQLException e) {
-			log.error("db error", e);
-			throw e;
+			throw exTranslator.translate("save", sql, e);
 		} finally {
 			close(conn, pstmt, null);
 		}
@@ -63,7 +66,8 @@ public class MemberRepositoryV3{
 		DataSourceUtils.releaseConnection(conn, dataSource);
 	}
 
-	public Member findById(String memberId) throws SQLException {
+	@Override
+	public Member findById(String memberId) {
 		String sql = "select * from member where member_id=?";
 
 		Connection conn = null;
@@ -83,14 +87,14 @@ public class MemberRepositoryV3{
 				throw new NoSuchElementException("member not found memberId = " + memberId);
 			}
 		} catch (SQLException e) {
-			log.error("error", e);
-			throw e;
+			throw exTranslator.translate("findById", sql, e);
 		} finally {
 			close(conn, pstmt, rs);
 		}
 	}
 
-	public void update(String memberId, int money) throws SQLException {
+	@Override
+	public void update(String memberId, int money) {
 		String sql = "update member set money=? where member_id=?";
 
 		Connection conn = null;
@@ -104,14 +108,14 @@ public class MemberRepositoryV3{
 			int resultSize = pstmt.executeUpdate();
 			log.info("resultSize = {}", resultSize);
 		} catch (SQLException e) {
-			log.error("db error", e);
-			throw e;
+			throw exTranslator.translate("update", sql, e);
 		} finally {
 			close(conn, pstmt, null);
 		}
 	}
 
-	public void delete(String memberId) throws SQLException {
+	@Override
+	public void delete(String memberId) {
 		String sql = "delete from member where member_id = ?";
 
 		Connection conn = null;
@@ -123,8 +127,7 @@ public class MemberRepositoryV3{
 			pstmt.setString(1, memberId);
 			pstmt.executeUpdate();
 		} catch (SQLException e) {
-			log.error("db error", e);
-			throw e;
+			throw exTranslator.translate("delete", sql, e);
 		} finally {
 			close(conn, pstmt, null);
 		}
